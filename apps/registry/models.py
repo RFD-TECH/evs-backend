@@ -47,10 +47,12 @@ class Credential(models.Model):
     STATUS_ACTIVE = "active"
     STATUS_REVOKED = "revoked"
     STATUS_QUARANTINED = "quarantined"
+    STATUS_SUSPENDED = "suspended"
     STATUS_CHOICES = [
         (STATUS_ACTIVE, "Active"),
         (STATUS_REVOKED, "Revoked"),
         (STATUS_QUARANTINED, "Quarantined — under review"),
+        (STATUS_SUSPENDED, "Suspended — migration rollback or hold"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -58,6 +60,8 @@ class Credential(models.Model):
         help_text="Human-readable reference, e.g. GSL/2024/LLB/001234.")
     schema_version = models.ForeignKey(
         CredentialSchemaVersion, on_delete=models.PROTECT, related_name="credentials",
+        null=True, blank=True,
+        help_text="Null for legacy-migrated credentials that predate the schema registry.",
     )
     institution_id = models.UUIDField(db_index=True,
         help_text="InstitutionMaster.id — FK enforced at application layer (cross-app).")
@@ -81,6 +85,10 @@ class Credential(models.Model):
     revoked_by = models.UUIDField(null=True, blank=True)
     batch_id = models.UUIDField(null=True, blank=True, db_index=True,
         help_text="BatchIngest.id that created this record.")
+    legacy = models.BooleanField(default=False, db_index=True,
+        help_text="True if migrated from a legacy system (Phase 8).")
+    wave_id = models.UUIDField(null=True, blank=True, db_index=True,
+        help_text="MigrationWave.id — set only for legacy credentials.")
     integrity_checked_at = models.DateTimeField(null=True, blank=True)
     integrity_ok = models.BooleanField(null=True, blank=True,
         help_text="Set by the nightly integrity sweep task.")
