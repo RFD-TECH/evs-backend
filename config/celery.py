@@ -59,4 +59,10 @@ app.conf.beat_schedule = {
         "schedule": 60.0 * 15,
         "options": {"queue": "sla-monitor"},
     },
+    # Foreign credential SLA monitor — every 15 minutes
+    "evs-fca-sla-monitor": {
+        "task": "apps.foreign_credentials.tasks.fca_sla_monitor",
+        "schedule": 60.0 * 15,
+        "options": {"queue": "sla-monitor"},
+    },
 }
