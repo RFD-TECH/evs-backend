@@ -1,0 +1,124 @@
+version: "3.9"
+
+services:
+  evs-db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: evs_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5435:5432"
+    volumes:
+      - evs_pgdata:/var/lib/postgresql/data
+    networks:
+      - ams-network
+
+  evs-redis:
+    image: redis:7-alpine
+    ports:
+      - "6382:6379"
+    networks:
+      - ams-network
+
+  web:
+    build: .
+    command: gunicorn config.wsgi:application --bind 0.0.0.0:8003 --workers 4 --reload
+    ports:
+      - "8003:8003"
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.base
+      DBENGINE: postgresql
+      DBNAME: evs_db
+      DBUSER: postgres
+      DBPASSWORD: postgres
+      DBHOST: evs-db
+      DBPORT: "5432"
+      REDIS_URL: redis://evs-redis:6379/0
+      KEYCLOAK_ENABLED: "False"
+      TIME_ZONE: Africa/Accra
+    depends_on:
+      - evs-db
+      - evs-redis
+    networks:
+      - ams-network
+
+  worker-high:
+    build: .
+    command: celery -A config.celery worker -Q high-priority -c 4 --loglevel=info
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.base
+      DBENGINE: postgresql
+      DBNAME: evs_db
+      DBUSER: postgres
+      DBPASSWORD: postgres
+      DBHOST: evs-db
+      REDIS_URL: redis://evs-redis:6379/0
+    depends_on:
+      - evs-db
+      - evs-redis
+    networks:
+      - ams-network
+
+  worker-general:
+    build: .
+    command: celery -A config.celery worker -Q normal,notifications -c 4 --loglevel=info
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.base
+      DBENGINE: postgresql
+      DBNAME: evs_db
+      DBUSER: postgres
+      DBPASSWORD: postgres
+      DBHOST: evs-db
+      REDIS_URL: redis://evs-redis:6379/0
+    depends_on:
+      - evs-db
+      - evs-redis
+    networks:
+      - ams-network
+
+  worker-sla:
+    build: .
+    command: celery -A config.celery worker -Q sla-monitor,integrity-sweep,outbox -c 2 --loglevel=info
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.base
+      DBENGINE: postgresql
+      DBNAME: evs_db
+      DBUSER: postgres
+      DBPASSWORD: postgres
+      DBHOST: evs-db
+      REDIS_URL: redis://evs-redis:6379/0
+    depends_on:
+      - evs-db
+      - evs-redis
+    networks:
+      - ams-network
+
+  beat:
+    build: .
+    command: celery -A config.celery beat --scheduler django_celery_beat.schedulers:DatabaseScheduler --loglevel=info
+    env_file: .env
+    environment:
+      DJANGO_SETTINGS_MODULE: config.settings.base
+      DBENGINE: postgresql
+      DBNAME: evs_db
+      DBUSER: postgres
+      DBPASSWORD: postgres
+      DBHOST: evs-db
+      REDIS_URL: redis://evs-redis:6379/0
+    depends_on:
+      - evs-db
+      - evs-redis
+    networks:
+      - ams-network
+
+volumes:
+  evs_pgdata:
+
+networks:
+  ams-network:
+    external: true
