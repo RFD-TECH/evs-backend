@@ -47,4 +47,16 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=4, minute=0),
         "options": {"queue": "sla-monitor"},
     },
+    # Connector synthetic health probes — every 60 seconds (F04-02)
+    "evs-connector-health-probe": {
+        "task": "apps.connectors.tasks.synthetic_health_probe",
+        "schedule": 60.0,
+        "options": {"queue": "sla-monitor"},
+    },
+    # Manual queue SLA escalation — every 15 minutes
+    "evs-queue-sla-escalation": {
+        "task": "apps.connectors.tasks.escalate_sla_queue",
+        "schedule": 60.0 * 15,
+        "options": {"queue": "sla-monitor"},
+    },
 }

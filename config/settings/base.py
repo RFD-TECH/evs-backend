@@ -36,6 +36,7 @@ LOCAL_APPS = [
     "apps.institutions.apps.InstitutionsConfig",
     "apps.registry.apps.RegistryConfig",
     "apps.verification.apps.VerificationConfig",
+    "apps.connectors.apps.ConnectorsConfig",
     "apps.notifications.apps.NotificationsConfig",
 ]
 
