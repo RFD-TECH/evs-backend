@@ -176,3 +176,77 @@ class RevocationRecord(models.Model):
 
     def __str__(self):
         return f"Revoked({self.credential.credential_ref}) @ {self.revoked_at.date()}"
+
+
+# ── Phase 9 Models ────────────────────────────────────────────────────────────
+
+
+class IntegrityRun(models.Model):
+    """Persistent record of each nightly (or manual) credential integrity sweep.
+
+    The sweep task writes one ``IntegrityRun`` per execution. The ``checkpoint_state``
+    JSON field stores the last-processed credential PK so that a crashed sweep can
+    resume from where it stopped rather than restarting from the beginning.
+
+    After a successful run, ``merkle_root`` contains the SHA-256 of all
+    ``"{id}:{sha256_hash}"`` pairs sorted by credential UUID, providing a single
+    cryptographic fingerprint over the entire active credential corpus.
+    """
+
+    STATUS_RUNNING = "running"
+    STATUS_COMPLETED = "completed"
+    STATUS_PARTIAL = "partial"
+    STATUS_FAILED = "failed"
+    STATUS_CHOICES = [
+        (STATUS_RUNNING, "Running — sweep in progress"),
+        (STATUS_COMPLETED, "Completed — all credentials checked"),
+        (STATUS_PARTIAL, "Partial — sweep interrupted; checkpoint saved"),
+        (STATUS_FAILED, "Failed — unrecoverable error"),
+    ]
+
+    SWEEP_SCHEDULED = "scheduled"
+    SWEEP_MANUAL = "manual"
+    SWEEP_TYPES = [
+        (SWEEP_SCHEDULED, "Scheduled — triggered by Celery beat"),
+        (SWEEP_MANUAL, "Manual — triggered via API"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    sweep_type = models.CharField(max_length=12, choices=SWEEP_TYPES, default=SWEEP_SCHEDULED, db_index=True)
+    started_at = models.DateTimeField(default=timezone.now, db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    total_checked = models.PositiveIntegerField(default=0)
+    tampered_count = models.PositiveIntegerField(default=0)
+    merkle_root = models.CharField(
+        max_length=64, blank=True, default="",
+        help_text="SHA-256 of all '{uuid}:{sha256}' pairs sorted by credential UUID.",
+    )
+    hsm_signature = models.TextField(
+        blank=True, default="",
+        help_text="Base64-encoded HSM signature over merkle_root.",
+    )
+    hsm_key_id = models.CharField(max_length=100, blank=True, default="")
+    status = models.CharField(
+        max_length=12, choices=STATUS_CHOICES, default=STATUS_RUNNING, db_index=True,
+    )
+    checkpoint_state = models.JSONField(
+        default=dict, blank=True,
+        help_text="Crash-recovery state — stores {'last_id': '<uuid>', 'checked': N, 'tampered': N}.",
+    )
+    triggered_by = models.UUIDField(
+        null=True, blank=True,
+        help_text="UserProfile.id — set for manual runs only.",
+    )
+    error_detail = models.TextField(blank=True, default="")
+
+    class Meta:
+        db_table = "registry_integrityrun"
+        ordering = ["-started_at"]
+        verbose_name = "Integrity Run"
+        indexes = [
+            models.Index(fields=["status", "started_at"]),
+            models.Index(fields=["sweep_type", "started_at"]),
+        ]
+
+    def __str__(self):
+        return f"IntegrityRun({self.sweep_type}, {self.started_at.date()}, {self.status})"

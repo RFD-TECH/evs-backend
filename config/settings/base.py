@@ -257,3 +257,17 @@ SPECTACULAR_SETTINGS = {
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_REQUEST": True,
 }
+
+# ── Phase 9 — Cryptographic Assurance & Tiered Retention ─────────────────────
+# MinIO bucket for Auditor-General export bundles
+EVS_EXPORT_BUCKET_NAME = os.environ.get("EVS_EXPORT_BUCKET_NAME", "evs-exports")
+# MinIO bucket for warm/cold audit archive (compressed JSONL)
+EVS_COLD_ARCHIVE_BUCKET_NAME = os.environ.get("EVS_COLD_ARCHIVE_BUCKET_NAME", "evs-cold-archive")
+# Pre-signed URL TTL for AG export bundles (24 hours default)
+EVS_EXPORT_URL_TTL_SECONDS = int(os.environ.get("EVS_EXPORT_URL_TTL_SECONDS", "86400"))
+# Number of days audit events stay in the hot (DB) tier before warm migration
+EVS_AUDIT_HOT_RETENTION_DAYS = int(os.environ.get("EVS_AUDIT_HOT_RETENTION_DAYS", "90"))
+# Number of days audit events stay in the warm (MinIO JSONL) tier before cold migration
+EVS_AUDIT_WARM_RETENTION_DAYS = int(os.environ.get("EVS_AUDIT_WARM_RETENTION_DAYS", str(365 * 3)))
+# Maximum number of AG export requests per actor per day
+EVS_EXPORT_RATE_LIMIT_PER_DAY = int(os.environ.get("EVS_EXPORT_RATE_LIMIT_PER_DAY", "5"))
