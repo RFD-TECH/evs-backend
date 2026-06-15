@@ -33,6 +33,8 @@ def _make_schema_urls():
 urlpatterns = [
     path("health", HealthView.as_view(), name="health"),
     path("v1/users/", include("apps.users.urls")),
+    path("v1/registry/", include("apps.registry.urls")),
+    path("v1/institutions/", include("apps.institutions.urls")),
     path("v1/audit/", include("apps.audit.urls")),
     path("v1/hsm/", include("apps.hsm.urls")),
     *_make_schema_urls(),
