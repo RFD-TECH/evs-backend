@@ -39,6 +39,8 @@ LOCAL_APPS = [
     "apps.connectors.apps.ConnectorsConfig",
     "apps.foreign_credentials.apps.ForeignCredentialsConfig",
     "apps.notifications.apps.NotificationsConfig",
+    "apps.fraud_detection.apps.FraudDetectionConfig",
+    "apps.legacy_migration.apps.LegacyMigrationConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
