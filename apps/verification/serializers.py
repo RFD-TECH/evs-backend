@@ -10,9 +10,11 @@ class VerificationSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = VerificationSession
         fields = [
-            "id", "credential_id_claimed", "credential_ref",
-            "result", "verifier_ip", "verifier_user_agent",
-            "verifier_id", "jwt_kid", "verification_ms", "created_at",
+            "id", "result_id", "credential_id_claimed", "credential_ref",
+            "result", "channel", "verifier_ip", "verifier_user_agent",
+            "device_fingerprint", "verifier_id", "jwt_kid",
+            "payload_hash", "checks_performed", "audit_chain_ref",
+            "latency_ms", "created_at",
         ]
         read_only_fields = fields
 

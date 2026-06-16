@@ -2,6 +2,7 @@
 import logging
 import os
 import time
+from datetime import timedelta
 
 from django.conf import settings
 
@@ -18,6 +19,9 @@ _PURPOSE_TO_KID_SETTING = {
     "dg_sign": "HSM_KEY_ID_DG_SIGN",
     "credential_sign": "HSM_KEY_ID_CREDENTIAL_SIGN",
 }
+
+_QR_JWT_ISSUER_DEFAULT = "urn:gh:clet:evs"
+_QR_JWT_CLOCK_SKEW = timedelta(seconds=300)
 
 
 def get_active_key_for_purpose(purpose: str):
@@ -39,6 +43,7 @@ def sign_payload(*, purpose: str, payload: dict) -> dict:
 def verify_qr_token(token: str) -> dict:
     """Verify a QR JWT and return its decoded claims.
 
+    Applies a 5-minute clock-skew leeway (EVS-F03 requirement).
     Raises jwt.InvalidTokenError on failure.
     """
     import jwt as _jwt
@@ -48,7 +53,12 @@ def verify_qr_token(token: str) -> dict:
 
     secret_env = _PURPOSE_TO_KEY_ENV["qr_jwt_sign"]
     secret = os.environ.get(secret_env, f"dev-qr_jwt_sign-secret-key-change-in-prod")
-    return _jwt.decode(token, secret, algorithms=["HS256"])
+    issuer = getattr(settings, "EVS_QR_JWT_ISSUER", _QR_JWT_ISSUER_DEFAULT)
+    return _jwt.decode(
+        token, secret, algorithms=["HS256"],
+        options={"leeway": _QR_JWT_CLOCK_SKEW},
+        issuer=issuer,
+    )
 
 
 # ── Private ───────────────────────────────────────────────────────────────────
@@ -63,7 +73,7 @@ def _sign_software(*, purpose: str, payload: dict) -> dict:
     secret = os.environ.get(secret_env, f"dev-{purpose}-secret-key-change-in-prod")
     kid_setting = _PURPOSE_TO_KID_SETTING.get(purpose, f"HSM_KEY_ID_{purpose.upper()}")
     kid = getattr(settings, kid_setting, f"evs-{purpose}-v1")
-    issuer = getattr(settings, "EVS_QR_JWT_ISSUER", "evs.clet.gov.gh")
+    issuer = getattr(settings, "EVS_QR_JWT_ISSUER", _QR_JWT_ISSUER_DEFAULT)
 
     claims = {
         "iss": issuer,

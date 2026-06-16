@@ -154,12 +154,27 @@ class BatchIngest(models.Model):
 class RevocationRecord(models.Model):
     """Append-only revocation log. Referenced by verification service."""
 
+    SOURCE_CONFIRMED_FRAUD = "confirmed_fraud"
+    SOURCE_ADMIN = "admin"
+    SOURCE_DG = "dg"
+    SOURCE_CHOICES = [
+        (SOURCE_CONFIRMED_FRAUD, "Confirmed Fraud"),
+        (SOURCE_ADMIN, "Administrative"),
+        (SOURCE_DG, "Director-General Order"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     credential = models.ForeignKey(
         Credential, on_delete=models.CASCADE, related_name="revocations",
     )
     revoked_by = models.UUIDField(help_text="UserProfile.id of the revoking officer.")
     reason = models.TextField()
+    source = models.CharField(
+        max_length=20, choices=SOURCE_CHOICES, default=SOURCE_ADMIN,
+        help_text="Authority under which the revocation was issued.",
+    )
+    signature_ref = models.CharField(max_length=255, blank=True,
+        help_text="HSM signature token (kid:token) from the DG-sign step.")
     revoked_at = models.DateTimeField(default=timezone.now, db_index=True)
 
     class Meta:

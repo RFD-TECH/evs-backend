@@ -1,4 +1,5 @@
 """EVS verification API views — QR scan channel (Phase 3)."""
+import hashlib
 import logging
 
 from django.conf import settings
@@ -44,9 +45,25 @@ class PublicVerifyView(APIView):
             ip=ip,
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
             verifier_id=getattr(getattr(request, "user", None), "id", None),
+            channel=request.query_params.get("channel", "qr_scan"),
+            device_fingerprint=request.query_params.get("device_fingerprint", ""),
         )
         http_status = 200 if result["result"] == "verified" else _result_to_http(result["result"])
         return Response(result, status=http_status)
+
+
+class ResultRetrieveView(APIView):
+    """GET /v1/verify/results/{result_id}
+
+    Retrieve a past verification result by its stable result_id UUID.
+    Requires audit:read permission.
+    """
+
+    def get(self, request, result_id):
+        if not check_permission(request, "audit:read"):
+            return error_response("Forbidden", status=403)
+        session = get_object_or_404(VerificationSession, result_id=result_id)
+        return Response(VerificationSessionSerializer(session).data)
 
 
 class VerificationSessionViewSet(GenericViewSet):
@@ -66,6 +83,8 @@ class VerificationSessionViewSet(GenericViewSet):
             qs = qs.filter(credential_id_claimed=cid)
         if result := request.query_params.get("result"):
             qs = qs.filter(result=result)
+        if channel := request.query_params.get("channel"):
+            qs = qs.filter(channel=channel)
 
         page = self.paginate_queryset(qs)
         if page is not None:
