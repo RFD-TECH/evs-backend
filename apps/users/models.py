@@ -129,3 +129,99 @@ class RolePermission(models.Model):
 
     def __str__(self):
         return f"{self.role.name} → {self.permission.codename}"
+
+
+class UserRole(models.Model):
+    """Live role assignment — which EVS roles a user currently holds.
+
+    Created/revoked by shared.auth on every authenticated request when the
+    JWT role list diverges from the local table. Append-only in spirit:
+    revocation sets revoked_at rather than deleting the row.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name="role_assignments")
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="assignments")
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    granted_by = models.UUIDField(null=True, blank=True,
+        help_text="keycloak_sub of the actor who granted this assignment.")
+    justification = models.CharField(max_length=500, blank=True)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoke_reason = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "users_userrole"
+        indexes = [
+            models.Index(fields=["user", "revoked_at"], name="userrole_user_active_idx"),
+        ]
+
+    def __str__(self):
+        status = "active" if self.revoked_at is None else "revoked"
+        return f"{self.user.email} / {self.role.name} ({status})"
+
+
+class RoleChangeEvent(models.Model):
+    """Append-only audit log for role grants and revocations.
+
+    Written by shared.auth during JWT sync; never updated or deleted.
+    """
+
+    CHANGE_TYPE_ASSIGN = "assign"
+    CHANGE_TYPE_REVOKE = "revoke"
+    CHANGE_TYPE_CHOICES = [
+        (CHANGE_TYPE_ASSIGN, "Assign"),
+        (CHANGE_TYPE_REVOKE, "Revoke"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(UserProfile, on_delete=models.CASCADE, related_name="role_change_events")
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="change_events")
+    change_type = models.CharField(max_length=20, choices=CHANGE_TYPE_CHOICES)
+    reason = models.CharField(max_length=500, blank=True)
+    occurred_at = models.DateTimeField()
+
+    class Meta:
+        db_table = "users_rolechangeevent"
+        ordering = ["-occurred_at"]
+
+    def __str__(self):
+        return f"{self.change_type} {self.role.name} → {self.user.email} @ {self.occurred_at}"
+
+
+class RoleMutualExclusion(models.Model):
+    """Pairs of roles that cannot coexist on the same user (SoD enforcement).
+
+    Checked by shared.auth before granting a new role during JWT sync.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    role_a = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="exclusions_as_a")
+    role_b = models.ForeignKey(Role, on_delete=models.CASCADE, related_name="exclusions_as_b")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "users_rolemutualexclusion"
+        unique_together = ("role_a", "role_b")
+
+    def __str__(self):
+        return f"{self.role_a.name} ⊗ {self.role_b.name}"
+
+    @classmethod
+    def check_conflict(cls, user, role):
+        """Return the conflicting Role if assigning `role` to `user` would violate a
+        mutual exclusion rule, else return None."""
+        from django.db.models import Q
+        active_role_ids = list(
+            UserRole.objects.filter(user=user, revoked_at__isnull=True).values_list("role_id", flat=True)
+        )
+        if not active_role_ids:
+            return None
+        exclusion = cls.objects.filter(
+            Q(role_a=role, role_b_id__in=active_role_ids) |
+            Q(role_b=role, role_a_id__in=active_role_ids)
+        ).first()
+        if exclusion is None:
+            return None
+        return exclusion.role_b if exclusion.role_a_id == role.pk else exclusion.role_a
