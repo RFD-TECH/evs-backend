@@ -27,7 +27,7 @@ class Migration(migrations.Migration):
             model_name="verificationsession",
             name="result_id",
             field=models.UUIDField(
-                default=uuid.uuid4, editable=False,
+                null=True, editable=False,
                 help_text="Stable external identifier — used in GET /v1/verify/results/{result_id}.",
             ),
         ),

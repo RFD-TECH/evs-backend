@@ -40,6 +40,12 @@ class CredentialDetailSerializer(CredentialSerializer):
 
 class RevokeCredentialSerializer(serializers.Serializer):
     reason = serializers.CharField(min_length=10, max_length=1000)
+    source = serializers.ChoiceField(
+        choices=RevocationRecord.SOURCE_CHOICES,
+        default=RevocationRecord.SOURCE_ADMIN,
+        required=False,
+    )
+    signature_ref = serializers.CharField(max_length=255, allow_blank=True, required=False)
 
 
 class QuarantineCredentialSerializer(serializers.Serializer):
@@ -67,5 +73,8 @@ class RevocationRecordSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = RevocationRecord
-        fields = ["id", "credential_ref", "revoked_by", "reason", "revoked_at"]
+        fields = [
+            "id", "credential_ref", "revoked_by", "reason",
+            "source", "signature_ref", "revoked_at",
+        ]
         read_only_fields = fields

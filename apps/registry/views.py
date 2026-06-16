@@ -69,6 +69,8 @@ class CredentialViewSet(GenericViewSet):
                 credential=cred,
                 actor_id=getattr(request.user, "id", None),
                 reason=serializer.validated_data["reason"],
+                source=serializer.validated_data.get("source"),
+                signature_ref=serializer.validated_data.get("signature_ref", ""),
             )
         except ValueError as exc:
             return error_response(str(exc), status=409)

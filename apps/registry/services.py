@@ -80,6 +80,8 @@ def revoke_credential(
     credential: Credential,
     actor_id: uuid.UUID,
     reason: str,
+    source: str = RevocationRecord.SOURCE_ADMIN,
+    signature_ref: str = "",
 ) -> RevocationRecord:
     """Revoke a credential and write an append-only RevocationRecord."""
     if credential.status == Credential.STATUS_REVOKED:
@@ -98,6 +100,8 @@ def revoke_credential(
             credential=credential,
             revoked_by=actor_id,
             reason=reason,
+            source=source,
+            signature_ref=signature_ref,
         )
 
     _audit(
@@ -115,6 +119,9 @@ def revoke_credential(
         {"credential_id": str(credential.id), "credential_ref": credential.credential_ref},
         topic="evs.registry",
     )
+
+    from django.core.cache import cache
+    cache.delete(f"evs:revoked:{credential.id}")
 
     return record
 
