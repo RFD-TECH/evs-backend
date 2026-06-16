@@ -12,8 +12,16 @@ class InstitutionMaster(models.Model):
     name = models.CharField(max_length=255, unique=True)
     code = models.CharField(max_length=20, unique=True, db_index=True,
         help_text="Short code, e.g. GSL, KSL, GIMPA.")
+    country_code = models.CharField(max_length=3, default="GH", db_index=True,
+        help_text="ISO 3166-1 alpha-3 country code.")
     accreditation_number = models.CharField(max_length=100, blank=True)
     contact_email = models.EmailField(blank=True)
+    programmes = models.JSONField(default=list,
+        help_text="List of programme descriptors offered by the institution.")
+    contact_officers = models.JSONField(default=list,
+        help_text="List of {name, email, phone} for institution liaison officers.")
+    api_keys = models.JSONField(default=dict,
+        help_text="Hashed API key metadata for M2M access (never store plain keys).")
     is_active = models.BooleanField(default=True, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -56,8 +64,8 @@ class GraduationCycle(models.Model):
         help_text="UserProfile.id of the institution officer who finalised submission.")
     sla_d20_notified = models.BooleanField(default=False,
         help_text="True once the D-20 (20 days remaining) reminder has been sent.")
-    sla_d7_notified = models.BooleanField(default=False,
-        help_text="True once the D-7 (7 days remaining) reminder has been sent.")
+    sla_d28_notified = models.BooleanField(default=False,
+        help_text="True once the D-28 (28 days remaining) statutory reminder has been sent.")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -77,12 +85,12 @@ class SlaEvent(models.Model):
     """SLA monitoring event logged for a graduation cycle."""
 
     EVENT_D20_REMINDER = "d20_reminder"
-    EVENT_D7_REMINDER = "d7_reminder"
+    EVENT_D28_REMINDER = "d28_reminder"
     EVENT_OVERDUE_ESCALATION = "overdue_escalation"
     EVENT_SUBMISSION_RECEIVED = "submission_received"
     EVENT_CHOICES = [
         (EVENT_D20_REMINDER, "D-20 Reminder Sent"),
-        (EVENT_D7_REMINDER, "D-7 Reminder Sent"),
+        (EVENT_D28_REMINDER, "D-28 Statutory Reminder Sent"),
         (EVENT_OVERDUE_ESCALATION, "Overdue Escalation"),
         (EVENT_SUBMISSION_RECEIVED, "Submission Received"),
     ]

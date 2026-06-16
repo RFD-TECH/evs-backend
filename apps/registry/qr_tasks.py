@@ -26,8 +26,8 @@ def sign_qr_jwt(*, credential_id: str):
             payload={
                 "sub": str(cred.id),
                 "ref": cred.credential_ref,
-                "sha": cred.sha256_hash,
-                "iss": getattr(settings, "EVS_QR_JWT_ISSUER", "evs.clet.gov.gh"),
+                "cred_hash": cred.sha256_hash,  # SRS §5.1 — claim name is cred_hash
+                "iss": getattr(settings, "EVS_QR_JWT_ISSUER", "urn:gh:clet:evs"),
             },
         )
         token = result["token"]

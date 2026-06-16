@@ -15,11 +15,21 @@ from .models import BatchIngest, Credential, CredentialSchemaVersion, Revocation
 
 logger = logging.getLogger(__name__)
 
-_REQUIRED_FIELDS = ["credential_ref", "candidate_name", "programme", "graduation_year"]
+# SRS §4.2 required fields for every credential record.
+_REQUIRED_FIELDS = [
+    "credential_ref",
+    "student_full_name",
+    "date_of_birth",
+    "waec_index",
+    "institution_code",
+    "graduate_index_number",
+    "degree_classification",
+    "programme_code",
+]
 
 
 def process_batch_ingest(batch: BatchIngest, file_bytes: bytes) -> None:
-    """Parse file and register credentials. Partial success — valid rows committed."""
+    """Two-phase ingest: validate all records first, then write valid ones atomically."""
     batch.status = BatchIngest.STATUS_PROCESSING
     batch.save(update_fields=["status"])
 
@@ -38,26 +48,52 @@ def process_batch_ingest(batch: BatchIngest, file_bytes: bytes) -> None:
         return
 
     batch.total_records = len(records)
-    success = 0
-    failure = 0
-    row_errors = []
+    batch.save(update_fields=["total_records"])
 
+    # Phase 1: validate all records, collect errors.
+    valid_records = []
+    row_errors = []
     for row_num, record in enumerate(records, start=1):
         try:
-            _register_one(record, batch)
-            success += 1
+            _validate_record(record, batch.schema_version)
+            valid_records.append((row_num, record))
         except Exception as exc:
-            failure += 1
             row_errors.append({
                 "row": row_num,
                 "ref": record.get("credential_ref", ""),
                 "error": str(exc),
             })
 
+    failure = len(row_errors)
+
+    if not valid_records:
+        # All rows failed — mark the whole batch as failed.
+        batch.status = BatchIngest.STATUS_FAILED
+        batch.failure_count = failure
+        batch.row_errors = row_errors
+        batch.completed_at = timezone.now()
+        batch.save(update_fields=["status", "failure_count", "row_errors", "completed_at"])
+        return
+
+    # Phase 2: write valid records atomically.
+    success = 0
+    with transaction.atomic():
+        for row_num, record in valid_records:
+            try:
+                _register_one_atomic(record, batch)
+                success += 1
+            except Exception as exc:
+                failure += 1
+                row_errors.append({
+                    "row": row_num,
+                    "ref": record.get("credential_ref", ""),
+                    "error": str(exc),
+                })
+
     batch.success_count = success
     batch.failure_count = failure
     batch.row_errors = row_errors
-    batch.status = BatchIngest.STATUS_COMPLETED
+    batch.status = BatchIngest.STATUS_COMPLETED if success > 0 else BatchIngest.STATUS_FAILED
     batch.completed_at = timezone.now()
     batch.save()
 
@@ -67,7 +103,7 @@ def process_batch_ingest(batch: BatchIngest, file_bytes: bytes) -> None:
         entity_id=str(batch.id),
         old_state={"status": "processing"},
         new_state={
-            "status": "completed",
+            "status": batch.status,
             "success": success,
             "failure": failure,
             "institution_id": str(batch.institution_id),
@@ -137,10 +173,11 @@ def quarantine_credential(*, credential: Credential, actor_id: uuid.UUID, reason
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-def _register_one(record: dict, batch: BatchIngest) -> Credential:
-    """Validate, canonicalise, and store one credential record."""
-    _validate_record(record, batch.schema_version)
+def _register_one_atomic(record: dict, batch: BatchIngest) -> Credential:
+    """Compute hash and store one already-validated credential record.
 
+    Called inside an open transaction (Phase 2 of two-phase ingest).
+    """
     sha = sha256_of_canonical(record)
     if Credential.objects.filter(sha256_hash=sha).exists():
         raise ValueError(
@@ -158,6 +195,15 @@ def _register_one(record: dict, batch: BatchIngest) -> Credential:
         institution_id=batch.institution_id,
         graduation_cycle_id=batch.graduation_cycle_id,
         candidate_id=record.get("candidate_id"),
+        # Typed PII columns
+        student_full_name=record.get("student_full_name", ""),
+        date_of_birth=record.get("date_of_birth") or None,
+        waec_index=record.get("waec_index", ""),
+        llb_award_date=record.get("llb_award_date") or None,
+        institution_code=record.get("institution_code", ""),
+        graduate_index_number=record.get("graduate_index_number", ""),
+        degree_classification=record.get("degree_classification", ""),
+        programme_code=record.get("programme_code", ""),
         payload=record,
         sha256_hash=sha,
         qr_url=qr_url,

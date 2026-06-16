@@ -6,6 +6,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
 from rest_framework.parsers import MultiPartParser
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
 from shared.exceptions import error_response, success_response
@@ -119,6 +120,23 @@ class BatchIngestViewSet(GenericViewSet):
         batch = get_object_or_404(self.get_queryset(), pk=pk)
         return Response(BatchIngestSerializer(batch).data)
 
+    @action(detail=True, methods=["get"])
+    def report(self, request, pk=None):
+        """GET /v1/registry/batches/{id}/report — per-row error report."""
+        if not check_permission(request, "credential:read"):
+            return error_response("Forbidden", status=403)
+        batch = get_object_or_404(self.get_queryset(), pk=pk)
+        return Response({
+            "batch_id": str(batch.id),
+            "transaction_id": str(batch.transaction_id),
+            "status": batch.status,
+            "total_records": batch.total_records,
+            "success_count": batch.success_count,
+            "failure_count": batch.failure_count,
+            "row_errors": batch.row_errors,
+            "completed_at": batch.completed_at.isoformat() if batch.completed_at else None,
+        })
+
     def create(self, request):
         if not check_permission(request, "bulk:ingest"):
             return error_response("Forbidden", status=403)
@@ -139,6 +157,19 @@ class BatchIngestViewSet(GenericViewSet):
 
         if not schema_id:
             return error_response("schema_id is required.", status=400)
+
+        # Institution ownership check (Task 19).
+        # institution_officer can only submit for their own institution.
+        if not check_permission(request, "institution:manage"):
+            user_institution_id = str(getattr(request.user, "institution_id", "") or "")
+            if not user_institution_id:
+                return error_response(
+                    "Your profile has no institution linked. Contact a registrar.", status=403
+                )
+            if user_institution_id != str(institution_id or ""):
+                return error_response(
+                    "You may only submit batches for your own institution.", status=403
+                )
 
         try:
             schema = CredentialSchemaVersion.objects.filter(
@@ -174,7 +205,7 @@ class SchemaVersionViewSet(GenericViewSet):
     def list(self, request):
         if not check_permission(request, "credential:read"):
             return error_response("Forbidden", status=403)
-        qs = CredentialSchemaVersion.objects.filter(is_active=True).order_by("schema_id", "-version")
+        qs = CredentialSchemaVersion.objects.order_by("schema_id", "-version")
         return Response(CredentialSchemaVersionSerializer(qs, many=True).data)
 
     def retrieve(self, request, pk=None):
@@ -182,3 +213,43 @@ class SchemaVersionViewSet(GenericViewSet):
             return error_response("Forbidden", status=403)
         schema = get_object_or_404(CredentialSchemaVersion, pk=pk)
         return Response(CredentialSchemaVersionSerializer(schema).data)
+
+
+class CredentialQueryView(APIView):
+    """GET /v1/registry/credentials/query?graduate_index_number=<idx>
+
+    Minimised lookup endpoint for NLEMS/NBES inter-system queries.
+    Returns only credential_ref, status, degree_classification, programme_code.
+    Requires credential:read permission.
+    """
+
+    def get(self, request):
+        if not check_permission(request, "credential:read"):
+            return error_response("Forbidden", status=403)
+
+        gin = request.query_params.get("graduate_index_number", "").strip()
+        waec = request.query_params.get("waec_index", "").strip()
+
+        if not gin and not waec:
+            return error_response(
+                "At least one of 'graduate_index_number' or 'waec_index' is required.", status=400
+            )
+
+        qs = Credential.objects.all()
+        if gin:
+            qs = qs.filter(graduate_index_number=gin)
+        if waec:
+            qs = qs.filter(waec_index=waec)
+
+        results = [
+            {
+                "credential_ref": c.credential_ref,
+                "status": c.status,
+                "degree_classification": c.degree_classification,
+                "programme_code": c.programme_code,
+                "institution_code": c.institution_code,
+                "graduate_index_number": c.graduate_index_number,
+            }
+            for c in qs[:20]
+        ]
+        return Response({"results": results, "count": len(results)})
