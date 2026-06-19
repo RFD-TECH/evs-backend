@@ -23,6 +23,24 @@ app.conf.beat_schedule = {
         "schedule": crontab(hour=2, minute=0),
         "options": {"queue": "outbox"},
     },
+    # Nightly credential integrity sweep — 03:00 UTC (EVS-N05)
+    "evs-integrity-sweep": {
+        "task": "apps.registry.tasks.nightly_integrity_sweep",
+        "schedule": crontab(hour=3, minute=0),
+        "options": {"queue": "integrity-sweep"},
+    },
+    # SLA monitor — every 15 minutes (graduation cycle deadlines)
+    "evs-sla-monitor": {
+        "task": "apps.institutions.tasks.sla_monitor",
+        "schedule": 60.0 * 15,
+        "options": {"queue": "sla-monitor"},
+    },
+    # Workflow SLA escalation — every 15 minutes (overdue cycles)
+    "evs-workflow-sla": {
+        "task": "apps.institutions.tasks.workflow_sla_monitor",
+        "schedule": 60.0 * 15,
+        "options": {"queue": "sla-monitor"},
+    },
     # Cleanup security events older than retention window — 04:00 UTC
     "evs-cleanup-security-events": {
         "task": "apps.audit.tasks.cleanup_security_events",

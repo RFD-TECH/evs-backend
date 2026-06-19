@@ -33,6 +33,8 @@ LOCAL_APPS = [
     "apps.audit.apps.AuditConfig",
     "apps.users.apps.UsersConfig",
     "apps.hsm.apps.HsmConfig",
+    "apps.institutions.apps.InstitutionsConfig",
+    "apps.registry.apps.RegistryConfig",
     "apps.notifications.apps.NotificationsConfig",
 ]
 
