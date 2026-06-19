@@ -42,5 +42,7 @@ urlpatterns = [
     path("v1/hsm/", include("apps.hsm.urls")),
     path("v1/", include("apps.connectors.urls")),
     path("v1/", include("apps.foreign_credentials.urls")),
+    path("v1/fraud/", include("apps.fraud_detection.urls")),
+    path("v1/legacy/", include("apps.legacy_migration.urls")),
     *_make_schema_urls(),
 ]

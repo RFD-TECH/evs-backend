@@ -65,4 +65,22 @@ app.conf.beat_schedule = {
         "schedule": 60.0 * 15,
         "options": {"queue": "sla-monitor"},
     },
+    # Nightly full-corpus fraud sweep — 01:00 UTC (EVS-F05-01)
+    "evs-fraud-nightly-sweep": {
+        "task": "evs-fraud-nightly-sweep",
+        "schedule": crontab(hour=1, minute=0),
+        "options": {"queue": "fraud-detection"},
+    },
+    # Auto-escalate stale HIGH-severity flags — every 30 minutes (EVS-F05-09)
+    "evs-fraud-auto-escalation": {
+        "task": "evs-fraud-auto-escalation",
+        "schedule": 60.0 * 30,
+        "options": {"queue": "fraud-detection"},
+    },
+    # Legacy migration confirmation deadline checker — every 6 hours (EVS-F09)
+    "evs-legacy-confirmation-deadline": {
+        "task": "evs-legacy-confirmation-deadline",
+        "schedule": 60.0 * 60 * 6,
+        "options": {"queue": "legacy-migration"},
+    },
 }
