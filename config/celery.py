@@ -83,4 +83,23 @@ app.conf.beat_schedule = {
         "schedule": 60.0 * 60 * 6,
         "options": {"queue": "legacy-migration"},
     },
+    # ── Phase 9 ──────────────────────────────────────────────────────────────
+    # Daily commitment builder — 02:30 UTC (runs after daily_hash_anchor at 02:00)
+    "evs-daily-commitment": {
+        "task": "apps.audit.tasks.build_daily_commitment",
+        "schedule": crontab(hour=2, minute=30),
+        "options": {"queue": "outbox"},
+    },
+    # Tiered retention migration — 00:00 UTC on the 1st of each month
+    "evs-tiered-retention-migration": {
+        "task": "apps.audit.tasks.run_tiered_retention_migration",
+        "schedule": crontab(hour=0, minute=0, day_of_month=1),
+        "options": {"queue": "outbox"},
+    },
+    # SLO synthetic transaction probe — every 5 minutes
+    "evs-slo-synthetic-probe": {
+        "task": "apps.connectors.tasks.synthetic_health_probe",
+        "schedule": 60.0 * 5,
+        "options": {"queue": "sla-monitor"},
+    },
 }
