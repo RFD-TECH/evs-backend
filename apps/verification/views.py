@@ -53,6 +53,8 @@ class PublicVerifyView(APIView):
             ip=ip,
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
             verifier_id=getattr(getattr(request, "user", None), "id", None),
+            channel=request.query_params.get("channel", "qr_scan"),
+            device_fingerprint=request.query_params.get("device_fingerprint", ""),
         )
         http_status = 200 if result["result"] == "verified" else _result_to_http(result["result"])
         return Response(result, status=http_status)

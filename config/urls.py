@@ -3,6 +3,8 @@ from django.urls import include, path
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.users.views import PermissionCheckView
+
 
 class HealthView(APIView):
     """GET /health — liveness probe; no auth required."""

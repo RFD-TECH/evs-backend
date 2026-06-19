@@ -65,6 +65,7 @@ class AuditEvent(models.Model):
         event_id = kwargs.pop("event_id", uuid.uuid4())
         created_at = kwargs.pop("created_at", timezone.now())
 
+        # Hash covers all forensically relevant fields (EVS-N01).
         payload = json.dumps(
             {
                 "event_id": str(event_id),
@@ -74,6 +75,10 @@ class AuditEvent(models.Model):
                 "entity_id": str(kwargs.get("entity_id", "")),
                 "old_state": kwargs.get("old_state") or {},
                 "new_state": kwargs.get("new_state") or {},
+                "ip_address": str(kwargs.get("ip_address") or ""),
+                "user_agent": str(kwargs.get("user_agent") or ""),
+                "request_id": str(kwargs.get("request_id") or ""),
+                "source_system": str(kwargs.get("source_system") or "evs"),
                 "created_at": created_at.isoformat(),
             },
             sort_keys=True,
@@ -89,24 +94,21 @@ class AuditEvent(models.Model):
             **kwargs,
         )
 
+        # Relay to CALS via outbox — the Celery poller forwards to System 17 asynchronously.
         from shared.events import publish
-        publish("AuditEventRecorded", {"event_id": str(event.event_id), "chain_hash": chain_hash}, topic="evs.audit")
-
-        # Relay to CALS (System 22) via System 17 — best-effort
-        try:
-            from shared.integrations.system17 import get_system17_client
-            get_system17_client().relay_audit_event(
-                action=action,
-                resource_type=kwargs.get("entity_type") or "resource",
-                resource_id=str(kwargs.get("entity_id") or ""),
-                user_id=str(kwargs.get("actor_id") or ""),
-                principal=str(kwargs.get("actor_id") or "system"),
-                previous_hash=previous_hash,
-                current_hash=chain_hash,
-                trace_id=str(kwargs.get("request_id") or event_id),
-            )
-        except Exception as exc:
-            logger.warning("system17.relay.error action=%s err=%s", action, exc)
+        publish(
+            "AuditEventRecorded",
+            {
+                "event_id": str(event.event_id),
+                "chain_hash": chain_hash,
+                "action": action,
+                "entity_type": kwargs.get("entity_type", ""),
+                "entity_id": str(kwargs.get("entity_id") or ""),
+                "actor_id": str(kwargs.get("actor_id") or ""),
+                "previous_hash": previous_hash,
+            },
+            topic="evs.audit",
+        )
 
         return event
 

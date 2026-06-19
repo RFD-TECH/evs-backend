@@ -8,6 +8,7 @@ import logging
 from django.shortcuts import get_object_or_404
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
 from shared.exceptions import error_response, success_response
@@ -155,3 +156,28 @@ class RoleViewSet(GenericViewSet):
             return error_response("Forbidden", status=403)
         from .models import Permission
         return Response(PermissionSerializer(Permission.objects.all(), many=True).data)
+
+
+class PermissionCheckView(APIView):
+    """GET /v1/permissions/check?codename=<codename>
+
+    Dry-run: returns whether the calling user holds the requested permission.
+    Never modifies state; safe for other services to call as an authz probe.
+    """
+
+    def get(self, request):
+        auth = getattr(request, "auth", None)
+        if not auth:
+            return error_response("Authentication required.", status=401)
+
+        codename = request.query_params.get("codename", "").strip()
+        if not codename:
+            return error_response("Query parameter 'codename' is required.", status=400)
+
+        from shared.rbac import has_permission
+        allowed = has_permission(auth, codename)
+        return Response({
+            "codename": codename,
+            "allowed": allowed,
+            "sub": str(auth.get("sub", "")),
+        })

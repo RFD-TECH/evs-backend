@@ -143,6 +143,8 @@ class VerificationSession(models.Model):
         help_text="Machine-readable detail code, e.g. BYTE_RANGE_INTEGRITY_FAILURE.")
     verifier_ip = models.GenericIPAddressField(null=True, blank=True)
     verifier_user_agent = models.TextField(blank=True)
+    device_fingerprint = models.CharField(max_length=255, blank=True,
+        help_text="Client-supplied device fingerprint for fraud correlation.")
     verifier_id = models.UUIDField(null=True, blank=True, db_index=True,
         help_text="UserProfile.id if the verifier was authenticated.")
     jwt_kid = models.CharField(max_length=100, blank=True,
