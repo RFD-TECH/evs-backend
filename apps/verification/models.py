@@ -125,6 +125,21 @@ class VerificationSession(models.Model):
         (CHANNEL_MANUAL, "Manual"),
     ]
 
+    CHANNEL_QR_SCAN = "qr_scan"
+    CHANNEL_PDF = "pdf"
+    CHANNEL_UPLOADED_QR = "uploaded_qr"
+    CHANNEL_WAEC = "waec"
+    CHANNEL_FACULTY = "faculty"
+    CHANNEL_MANUAL = "manual"
+    CHANNEL_CHOICES = [
+        (CHANNEL_QR_SCAN, "QR Scan"),
+        (CHANNEL_PDF, "PDF Upload"),
+        (CHANNEL_UPLOADED_QR, "Uploaded-QR"),
+        (CHANNEL_WAEC, "WAEC"),
+        (CHANNEL_FACULTY, "Faculty Connector"),
+        (CHANNEL_MANUAL, "Manual"),
+    ]
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     channel = models.CharField(
         max_length=15, choices=CHANNEL_CHOICES, default=CHANNEL_QR_SCAN, db_index=True
