@@ -1,0 +1,70 @@
+# Core
+django>=5.1,<6
+djangorestframework>=3.15
+django-environ>=0.11
+PyJWT[crypto]>=2.9
+
+# Database
+psycopg2-binary>=2.9
+
+# Workflow
+django-fsm>=3.0
+
+# Background Tasks
+celery>=5.4
+redis>=5.2
+django-celery-beat>=2.7
+
+# API
+drf-spectacular>=0.27
+django-filter>=24.3
+django-cors-headers>=4.4
+
+# Event Streaming
+kafka-python>=2.0
+
+# Cryptography
+cryptography>=43.0
+
+# Storage
+django-storages[s3]>=1.14
+boto3>=1.35
+Pillow>=11.0
+
+# PDF & Documents
+weasyprint>=62
+reportlab>=4.2
+openpyxl>=3.1
+
+# QR Codes
+qrcode[pil]>=8.0
+pyzbar>=0.1.9
+
+# PDF Signature Parsing (PAdES / PKCS#7)
+pypdf>=5.1
+pyhanko>=0.21
+pyhanko-certvalidator>=0.26
+
+# TOTP / MFA
+pyotp>=2.9
+
+# Argon2id password hashing
+argon2-cffi>=23.1
+
+# File Validation
+python-magic-bin; sys_platform == "win32"
+python-magic; sys_platform != "win32"
+
+# HTTP client (WAEC API, GTEC, S17 callbacks)
+httpx>=0.28
+requests>=2.32
+
+# JSON Schema (credential schema validation)
+jsonschema>=4.23
+
+# Production Server
+gunicorn>=23.0
+whitenoise>=6.8
+
+# Utilities
+python-decouple>=3.8
