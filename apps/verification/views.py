@@ -1,4 +1,5 @@
-"""EVS verification API views — QR scan + PDF + Uploaded-QR + admin."""
+"""EVS verification API views — QR scan channel (Phase 3)."""
+import hashlib
 import logging
 
 from django.conf import settings
@@ -53,73 +54,25 @@ class PublicVerifyView(APIView):
             ip=ip,
             user_agent=request.META.get("HTTP_USER_AGENT", ""),
             verifier_id=getattr(getattr(request, "user", None), "id", None),
+            channel=request.query_params.get("channel", "qr_scan"),
+            device_fingerprint=request.query_params.get("device_fingerprint", ""),
         )
         http_status = 200 if result["result"] == "verified" else _result_to_http(result["result"])
         return Response(result, status=http_status)
 
 
-class PdfVerifyView(APIView):
-    """POST /v1/verify/pdf — submit a signed PDF certificate for verification (F06)."""
+class ResultRetrieveView(APIView):
+    """GET /v1/verify/results/{result_id}
 
-    parser_classes = [MultiPartParser]
+    Retrieve a past verification result by its stable result_id UUID.
+    Requires audit:read permission.
+    """
 
-    def post(self, request):
-        if not check_permission(request, "credential:read"):
+    def get(self, request, result_id):
+        if not check_permission(request, "audit:read"):
             return error_response("Forbidden", status=403)
-
-        file_obj = request.FILES.get("file")
-        if file_obj is None:
-            return error_response("'file' field is required.", status=400)
-        if file_obj.content_type not in ALLOWED_PDF_MIME:
-            return error_response("Only PDF files are accepted.", status=415)
-        if file_obj.size > MAX_UPLOAD_BYTES:
-            return error_response("File exceeds the 10 MB limit.", status=413)
-
-        file_bytes = file_obj.read()
-
-        from .pdf_service import verify_pdf
-        result = verify_pdf(
-            file_bytes=file_bytes,
-            ip=_get_client_ip(request),
-            user_agent=request.META.get("HTTP_USER_AGENT", ""),
-            verifier_id=getattr(request.user, "id", None),
-        )
-
-        result.pop("_session_id", None)
-        http_status = 200 if result["result"] == "verified" else _result_to_http(result["result"])
-        return Response(result, status=http_status)
-
-
-class UploadedQrVerifyView(APIView):
-    """POST /v1/verify/uploaded-qr — decode QR from uploaded image or PDF (F07)."""
-
-    parser_classes = [MultiPartParser]
-
-    def post(self, request):
-        if not check_permission(request, "credential:read"):
-            return error_response("Forbidden", status=403)
-
-        file_obj = request.FILES.get("file")
-        if file_obj is None:
-            return error_response("'file' field is required.", status=400)
-        if file_obj.content_type not in ALLOWED_QR_MIME:
-            return error_response(
-                "Accepted types: PDF, PNG, JPEG.", status=415
-            )
-        if file_obj.size > MAX_UPLOAD_BYTES:
-            return error_response("File exceeds the 10 MB limit.", status=413)
-
-        file_bytes = file_obj.read()
-        from .qr_upload_service import verify_uploaded_qr
-        result = verify_uploaded_qr(
-            file_bytes=file_bytes,
-            mime_type=file_obj.content_type,
-            ip=_get_client_ip(request),
-            user_agent=request.META.get("HTTP_USER_AGENT", ""),
-            verifier_id=getattr(request.user, "id", None),
-        )
-        http_status = 200 if result["result"] == "verified" else _result_to_http(result["result"])
-        return Response(result, status=http_status)
+        session = get_object_or_404(VerificationSession, result_id=result_id)
+        return Response(VerificationSessionSerializer(session).data)
 
 
 class VerificationSessionViewSet(GenericViewSet):
@@ -141,8 +94,8 @@ class VerificationSessionViewSet(GenericViewSet):
             qs = qs.filter(channel=ch)
         if result := request.query_params.get("result"):
             qs = qs.filter(result=result)
-        if sha := request.query_params.get("file_sha256"):
-            qs = qs.filter(file_sha256=sha)
+        if channel := request.query_params.get("channel"):
+            qs = qs.filter(channel=channel)
 
         page = self.paginate_queryset(qs)
         if page is not None:

@@ -13,4 +13,5 @@ cycle_router.register("cycles", views.GraduationCycleViewSet, basename="graduati
 urlpatterns = [
     path("", include(institution_router.urls)),
     path("<uuid:institution_pk>/", include(cycle_router.urls)),
+    path("sla/status", views.SlaStatusView.as_view(), name="sla-status"),
 ]

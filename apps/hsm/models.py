@@ -15,7 +15,7 @@ class HsmKey(models.Model):
         ("qr_jwt_sign", "QR JWT Signing"),
         ("dg_sign", "Director-General Credential Signing"),
         ("credential_sign", "Credential Batch Signing"),
-        ("hmac_relay", "HMAC Inter-Service Relay"),
+        ("revocation_list_integrity", "Revocation List Integrity"),
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)

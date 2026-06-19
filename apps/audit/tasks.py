@@ -103,13 +103,16 @@ def daily_hash_anchor(self, target_date: str | None = None):
             head_hash=head_hash,
             event_count=count,
         )
+        from shared.events import publish
+        publish(
+            "AuditChainAnchorReady",
+            {"date": anchor_date.isoformat(), "head_hash": head_hash, "event_count": count},
+            topic="evs.audit",
+        )
 
-    from shared.events import publish
-    publish(
-        "AuditChainAnchorReady",
-        {"date": anchor_date.isoformat(), "head_hash": head_hash, "event_count": count},
-        topic="evs.audit",
-    )
+    # Mark as handed off to the relay queue (outbox will deliver to System 22).
+    anchor.exported_to_s22_at = tz.now()
+    anchor.save(update_fields=["exported_to_s22_at"])
 
     logger.info("daily_hash_anchor: anchored date=%s events=%d hash=%s", anchor_date, count, head_hash[:12])
 

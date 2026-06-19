@@ -3,6 +3,8 @@ from django.urls import include, path
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from apps.users.views import PermissionCheckView
+
 
 class HealthView(APIView):
     """GET /health — liveness probe; no auth required."""
@@ -38,5 +40,6 @@ urlpatterns = [
     path("v1/institutions/", include("apps.institutions.urls")),
     path("v1/audit/", include("apps.audit.urls")),
     path("v1/hsm/", include("apps.hsm.urls")),
+    path("v1/permissions/check", PermissionCheckView.as_view(), name="permission-check"),
     *_make_schema_urls(),
 ]

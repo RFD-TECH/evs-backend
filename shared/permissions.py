@@ -66,4 +66,18 @@ def check_permission(request, codename: str) -> bool:
     if not auth:
         return False
     from shared.rbac import has_permission as _hp
-    return _hp(auth, codename)
+    result = _hp(auth, codename)
+    if not result:
+        try:
+            from shared.secops import record_security_event
+            record_security_event(
+                category="authz_denied",
+                severity="warning",
+                ip_address=getattr(request, "ip_address", None) or request.META.get("REMOTE_ADDR"),
+                actor_id=str(auth.get("sub", "")) or None,
+                request_id=getattr(request, "request_id", None),
+                indicators={"codename": codename, "path": request.path, "method": request.method},
+            )
+        except Exception:
+            pass
+    return result
