@@ -82,7 +82,7 @@ class VerificationSession(models.Model):
     """One verification attempt, regardless of channel or outcome.
 
     Retained 10 years per statutory requirement EVS-N02.
-    `result_id` is the stable external identifier surfaced in API responses.
+    All four channels (QR scan, PDF, Uploaded-QR, WAEC/Faculty) write here.
     """
 
     RESULT_VERIFIED = "verified"
@@ -126,20 +126,23 @@ class VerificationSession(models.Model):
     ]
 
     CHANNEL_QR_SCAN = "qr_scan"
-    CHANNEL_API = "api"
+    CHANNEL_PDF = "pdf"
+    CHANNEL_UPLOADED_QR = "uploaded_qr"
+    CHANNEL_WAEC = "waec"
+    CHANNEL_FACULTY = "faculty"
+    CHANNEL_MANUAL = "manual"
     CHANNEL_CHOICES = [
         (CHANNEL_QR_SCAN, "QR Scan"),
-        (CHANNEL_API, "API"),
+        (CHANNEL_PDF, "PDF Upload"),
+        (CHANNEL_UPLOADED_QR, "Uploaded-QR"),
+        (CHANNEL_WAEC, "WAEC"),
+        (CHANNEL_FACULTY, "Faculty Connector"),
+        (CHANNEL_MANUAL, "Manual"),
     ]
 
-    id = models.BigAutoField(primary_key=True)
-    result_id = models.UUIDField(
-        default=uuid.uuid4, unique=True, db_index=True, editable=False,
-        help_text="Stable external identifier — used in GET /v1/verify/results/{result_id}.",
-    )
-    credential_id_claimed = models.UUIDField(
-        db_index=True,
-        help_text="The UUID from the URL path — not yet validated at record creation.",
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    channel = models.CharField(
+        max_length=15, choices=CHANNEL_CHOICES, default=CHANNEL_QR_SCAN, db_index=True
     )
     credential_id_claimed = models.UUIDField(db_index=True, null=True, blank=True,
         help_text="The UUID from the URL path or PDF metadata — not yet validated at record creation.")
@@ -151,10 +154,8 @@ class VerificationSession(models.Model):
         help_text="Null when the credential was not found or token was invalid.",
     )
     result = models.CharField(max_length=20, choices=RESULT_CHOICES, db_index=True)
-    channel = models.CharField(
-        max_length=30, choices=CHANNEL_CHOICES, default=CHANNEL_QR_SCAN,
-        help_text="Scan channel: qr_scan (camera) or api (programmatic).",
-    )
+    result_detail = models.CharField(max_length=255, blank=True,
+        help_text="Machine-readable detail code, e.g. BYTE_RANGE_INTEGRITY_FAILURE.")
     verifier_ip = models.GenericIPAddressField(null=True, blank=True)
     verifier_user_agent = models.TextField(blank=True)
     device_fingerprint = models.CharField(max_length=255, blank=True,
@@ -163,14 +164,10 @@ class VerificationSession(models.Model):
         help_text="UserProfile.id if the verifier was authenticated.")
     jwt_kid = models.CharField(max_length=100, blank=True,
         help_text="Key ID from the QR JWT header.")
-    payload_hash = models.CharField(max_length=64, blank=True,
-        help_text="SHA-256 hex of the raw JWT token string.")
-    checks_performed = models.JSONField(default=list,
-        help_text="Ordered list of check names that ran before the result was reached.")
-    audit_chain_ref = models.CharField(max_length=64, blank=True,
-        help_text="chain_hash of the AuditEvent written for this session (async-filled).")
-    latency_ms = models.PositiveIntegerField(null=True, blank=True,
-        help_text="End-to-end verification latency in milliseconds. Target: ≤2000 ms.")
+    file_sha256 = models.CharField(max_length=64, blank=True, db_index=True,
+        help_text="SHA-256 of uploaded PDF/image; links session to DocumentVaultObject.")
+    verification_ms = models.PositiveIntegerField(null=True, blank=True,
+        help_text="End-to-end verification latency in milliseconds.")
     created_at = models.DateTimeField(default=timezone.now, db_index=True)
 
     class Meta:
@@ -184,4 +181,67 @@ class VerificationSession(models.Model):
         ]
 
     def __str__(self):
-        return f"Verify({self.credential_id_claimed})[{self.channel}] → {self.result}"
+        cid = str(self.credential_id_claimed) if self.credential_id_claimed else "-"
+        return f"Verify({cid})[{self.channel}] → {self.result}"
+
+
+class PdfSignatureOutcome(models.Model):
+    """Per-signature outcome for a PDF verification (F06-02 / F06-03).
+
+    A multi-signature PDF produces multiple rows, all linked to the same
+    VerificationSession. If any signature fails, the overall session result
+    is invalid_signature or tampered.
+    """
+
+    PROFILE_PADES_BT = "pades_bt"
+    PROFILE_PADES_BLT = "pades_blt"
+    PROFILE_PADES_BLTA = "pades_blta"
+    PROFILE_PKCS7 = "pkcs7"
+    PROFILE_CHOICES = [
+        (PROFILE_PADES_BT, "PAdES B-T"),
+        (PROFILE_PADES_BLT, "PAdES B-LT"),
+        (PROFILE_PADES_BLTA, "PAdES B-LTA"),
+        (PROFILE_PKCS7, "PKCS#7 Detached"),
+    ]
+
+    REVOCATION_GOOD = "good"
+    REVOCATION_UNKNOWN = "unknown"
+    REVOCATION_REVOKED = "revoked"
+    REVOCATION_UNCHECKED = "unchecked"
+    REVOCATION_CHOICES = [
+        (REVOCATION_GOOD, "Good"),
+        (REVOCATION_UNKNOWN, "Unknown"),
+        (REVOCATION_REVOKED, "Revoked"),
+        (REVOCATION_UNCHECKED, "Unchecked — OCSP/CRL unreachable"),
+    ]
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    verification_session = models.ForeignKey(
+        VerificationSession, on_delete=models.CASCADE, related_name="signature_outcomes"
+    )
+    signer_subject = models.TextField(help_text="Distinguished Name of the signing certificate.")
+    signing_time = models.DateTimeField(null=True, blank=True)
+    profile = models.CharField(max_length=15, choices=PROFILE_CHOICES)
+    integrity_ok = models.BooleanField(
+        help_text="True when the PDF byte-range hash matches the embedded signature.")
+    chain_ok = models.BooleanField(
+        help_text="True when the certificate chain validates up to a trust anchor.")
+    revocation_status = models.CharField(max_length=10, choices=REVOCATION_CHOICES)
+    timestamp_ok = models.BooleanField(null=True, blank=True,
+        help_text="True when the embedded timestamp token validates. Null for B-T profiles.")
+    signer_ca = models.ForeignKey(
+        TrustAnchor, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="signature_outcomes",
+        help_text="The trust anchor whose chain this signature validated against.",
+    )
+    failure_reason = models.CharField(max_length=255, blank=True,
+        help_text="Machine-readable failure code if any check failed.")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = "verification_pdfsignatureoutcome"
+        ordering = ["created_at"]
+
+    def __str__(self):
+        ok = "OK" if (self.integrity_ok and self.chain_ok) else "FAIL"
+        return f"{ok} {self.signer_subject[:40]}…"
