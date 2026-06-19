@@ -1,10 +1,12 @@
 """EVS institutions API views."""
 import logging
+from datetime import date
 
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework.viewsets import GenericViewSet
 
 from shared.exceptions import error_response, success_response
@@ -163,3 +165,47 @@ class GraduationCycleViewSet(GenericViewSet):
         cycle = get_object_or_404(GraduationCycle, pk=pk, institution=inst)
         events = SlaEvent.objects.filter(cycle=cycle).order_by("-occurred_at")
         return Response(SlaEventSerializer(events, many=True).data)
+
+
+class SlaStatusView(APIView):
+    """GET /v1/institutions/sla/status
+
+    Summary of current SLA state across all open and overdue cycles.
+    Requires institution:read permission.
+    """
+
+    def get(self, request):
+        if not check_permission(request, "institution:read"):
+            return error_response("Forbidden", status=403)
+
+        today = date.today()
+        open_qs = GraduationCycle.objects.filter(
+            status=GraduationCycle.STATUS_OPEN
+        ).select_related("institution").order_by("submission_deadline")
+
+        overdue_qs = GraduationCycle.objects.filter(
+            status=GraduationCycle.STATUS_OVERDUE
+        ).select_related("institution").order_by("submission_deadline")
+
+        def _cycle_summary(cycle):
+            days = (cycle.submission_deadline - today).days
+            return {
+                "cycle_id": str(cycle.id),
+                "institution_code": cycle.institution.code,
+                "institution_name": cycle.institution.name,
+                "year": cycle.year,
+                "session": cycle.session,
+                "submission_deadline": cycle.submission_deadline.isoformat(),
+                "days_remaining": days,
+                "status": cycle.status,
+                "sla_d28_notified": cycle.sla_d28_notified,
+                "sla_d20_notified": cycle.sla_d20_notified,
+            }
+
+        return Response({
+            "as_of": today.isoformat(),
+            "open_cycles": [_cycle_summary(c) for c in open_qs],
+            "overdue_cycles": [_cycle_summary(c) for c in overdue_qs],
+            "open_count": open_qs.count(),
+            "overdue_count": overdue_qs.count(),
+        })

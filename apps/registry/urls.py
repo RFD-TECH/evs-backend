@@ -14,4 +14,5 @@ router.register("integrity/runs", IntegrityRunViewSet, basename="integrity-run")
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("credentials/query", views.CredentialQueryView.as_view(), name="credential-query"),
 ]

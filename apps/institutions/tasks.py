@@ -11,10 +11,10 @@ logger = logging.getLogger(__name__)
 def sla_monitor():
     """Check open graduation cycles and emit SLA events / notifications.
 
-    Triggers:
+    Statutory triggers (SRS §45):
+      - D-28 reminder: 28 or fewer days remaining before deadline
       - D-20 reminder: 20 or fewer days remaining before deadline
-      - D-7 reminder: 7 or fewer days remaining before deadline
-      - Overdue escalation: deadline has passed and cycle is still open
+      - Overdue: deadline has passed and cycle is still open
     """
     from apps.institutions.models import GraduationCycle, SlaEvent
 
@@ -23,13 +23,12 @@ def sla_monitor():
         status__in=[GraduationCycle.STATUS_OPEN]
     ).select_related("institution")
 
-    d20_count = d7_count = overdue_count = 0
+    d28_count = d20_count = overdue_count = 0
 
     for cycle in open_cycles:
         days_remaining = (cycle.submission_deadline - today).days
 
         if days_remaining < 0:
-            # Past deadline — escalate to overdue
             cycle.status = GraduationCycle.STATUS_OVERDUE
             cycle.save(update_fields=["status", "updated_at"])
             SlaEvent.objects.create(
@@ -45,20 +44,21 @@ def sla_monitor():
             overdue_count += 1
             continue
 
-        if days_remaining <= 7 and not cycle.sla_d7_notified:
+        # D-28 statutory reminder (SRS §45 — 28 days notice required).
+        if days_remaining <= 28 and not cycle.sla_d28_notified:
             SlaEvent.objects.create(
                 cycle=cycle,
-                event_type=SlaEvent.EVENT_D7_REMINDER,
+                event_type=SlaEvent.EVENT_D28_REMINDER,
                 details={
                     "days_remaining": days_remaining,
                     "deadline": cycle.submission_deadline.isoformat(),
                     "institution": cycle.institution.code,
                 },
             )
-            cycle.sla_d7_notified = True
-            cycle.save(update_fields=["sla_d7_notified", "updated_at"])
-            _notify_sla(cycle, "d7_reminder", days_remaining)
-            d7_count += 1
+            cycle.sla_d28_notified = True
+            cycle.save(update_fields=["sla_d28_notified", "updated_at"])
+            _notify_sla(cycle, "d28_reminder", days_remaining)
+            d28_count += 1
 
         elif days_remaining <= 20 and not cycle.sla_d20_notified:
             SlaEvent.objects.create(
@@ -76,8 +76,8 @@ def sla_monitor():
             d20_count += 1
 
     logger.info(
-        "sla_monitor: d20=%d d7=%d overdue=%d",
-        d20_count, d7_count, overdue_count,
+        "sla_monitor: d28=%d d20=%d overdue=%d",
+        d28_count, d20_count, overdue_count,
     )
 
 
@@ -86,11 +86,13 @@ def workflow_sla_monitor():
     """Check overdue cycles for escalation to CLET management. Runs every 15 min."""
     from apps.institutions.models import GraduationCycle
 
-    overdue = GraduationCycle.objects.filter(status=GraduationCycle.STATUS_OVERDUE)
+    overdue = GraduationCycle.objects.filter(
+        status=GraduationCycle.STATUS_OVERDUE
+    ).select_related("institution")
+
     for cycle in overdue:
         days_overdue = (date.today() - cycle.submission_deadline).days
-        if days_overdue > 3:
-            # Publish escalation event for System 21 (notifications)
+        if days_overdue > 31:
             from shared.events import publish
             publish(
                 "SlaEscalationRequired",
