@@ -37,6 +37,7 @@ LOCAL_APPS = [
     "apps.registry.apps.RegistryConfig",
     "apps.verification.apps.VerificationConfig",
     "apps.connectors.apps.ConnectorsConfig",
+    "apps.foreign_credentials.apps.ForeignCredentialsConfig",
     "apps.notifications.apps.NotificationsConfig",
 ]
 
