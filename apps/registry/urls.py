@@ -11,4 +11,5 @@ router.register("schemas", views.SchemaVersionViewSet, basename="schema-version"
 
 urlpatterns = [
     path("", include(router.urls)),
+    path("credentials/query", views.CredentialQueryView.as_view(), name="credential-query"),
 ]

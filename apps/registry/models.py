@@ -24,6 +24,8 @@ class CredentialSchemaVersion(models.Model):
     required_fields = models.JSONField(default=list,
         help_text="Ordered list of field names that must be present in every record.")
     is_active = models.BooleanField(default=True, db_index=True)
+    deprecated_at = models.DateTimeField(null=True, blank=True,
+        help_text="When this schema version was deprecated; NULL = still current.")
     created_by = models.UUIDField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -41,6 +43,8 @@ class Credential(models.Model):
 
     Immutable once written (status transitions are the only mutations).
     SHA-256 hash of the canonical payload is the tamper-evidence anchor.
+    Typed PII columns are indexed for NLEMS/NBES queries; the full payload
+    JSONB field is the source-of-truth for hash computation.
     10-year statutory retention (EVS-N02).
     """
 
@@ -65,6 +69,17 @@ class Credential(models.Model):
         help_text="GraduationCycle.id — FK enforced at application layer.")
     candidate_id = models.UUIDField(null=True, blank=True, db_index=True,
         help_text="UserProfile.id if the candidate has an EVS account.")
+
+    # ── Typed PII columns (SRS §4.2) — duplicated from payload for indexed queries ──
+    student_full_name = models.CharField(max_length=300, blank=True, db_index=True)
+    date_of_birth = models.DateField(null=True, blank=True)
+    waec_index = models.CharField(max_length=50, blank=True, db_index=True)
+    llb_award_date = models.DateField(null=True, blank=True)
+    institution_code = models.CharField(max_length=20, blank=True, db_index=True)
+    graduate_index_number = models.CharField(max_length=100, blank=True, db_index=True)
+    degree_classification = models.CharField(max_length=50, blank=True)
+    programme_code = models.CharField(max_length=50, blank=True, db_index=True)
+
     payload = models.JSONField(
         help_text="Canonical credential payload (sorted keys, NFC strings).")
     sha256_hash = models.CharField(max_length=64, unique=True, db_index=True,
@@ -95,6 +110,7 @@ class Credential(models.Model):
             models.Index(fields=["graduation_cycle_id", "status"]),
             models.Index(fields=["candidate_id"]),
             models.Index(fields=["integrity_ok", "status"]),
+            models.Index(fields=["graduate_index_number"]),
         ]
 
     def __str__(self):
@@ -120,6 +136,8 @@ class BatchIngest(models.Model):
     ]
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    transaction_id = models.UUIDField(unique=True, default=uuid.uuid4, db_index=True,
+        help_text="Externally-visible idempotency key for this batch transaction.")
     institution_id = models.UUIDField(db_index=True)
     graduation_cycle_id = models.UUIDField(null=True, blank=True, db_index=True)
     schema_version = models.ForeignKey(
@@ -183,3 +201,29 @@ class RevocationRecord(models.Model):
 
     def __str__(self):
         return f"Revoked({self.credential.credential_ref}) @ {self.revoked_at.date()}"
+
+
+class IntegrityRun(models.Model):
+    """Records each execution of the nightly integrity sweep (EVS-N05)."""
+
+    STATUS_RUNNING = "running"
+    STATUS_COMPLETED = "completed"
+    STATUS_FAILED = "failed"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    started_at = models.DateTimeField(default=timezone.now, db_index=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+    records_checked = models.PositiveIntegerField(default=0)
+    tampered_count = models.PositiveIntegerField(default=0)
+    tampered_ids = models.JSONField(default=list,
+        help_text="UUIDs of credentials found tampered (capped at 100 for storage).")
+    anchor_hash = models.CharField(max_length=64, blank=True,
+        help_text="chain_hash of the AuditEvent written for this sweep.")
+    status = models.CharField(max_length=20, default=STATUS_RUNNING)
+
+    class Meta:
+        db_table = "registry_integrityrun"
+        ordering = ["-started_at"]
+
+    def __str__(self):
+        return f"IntegrityRun {self.started_at.date()} checked={self.records_checked} tampered={self.tampered_count}"
