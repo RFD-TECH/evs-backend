@@ -1,16 +1,17 @@
 """QR JWT signing task — runs in high-priority queue after credential registration."""
 import logging
+import time
 
 from celery import shared_task
 
 logger = logging.getLogger(__name__)
 
+_QR_JWT_LIFETIME_SECONDS = 10 * 365 * 24 * 3600  # 10-year statutory credential lifetime
+
 
 @shared_task(name="apps.registry.qr_tasks.sign_qr_jwt", queue="high-priority", max_retries=3)
 def sign_qr_jwt(*, credential_id: str):
     """Sign a QR JWT for credential *credential_id* and persist it."""
-    from django.conf import settings
-
     from apps.registry.models import Credential
     from apps.hsm.service import sign_payload
 
@@ -21,6 +22,7 @@ def sign_qr_jwt(*, credential_id: str):
         return
 
     try:
+        now = int(time.time())
         result = sign_payload(
             purpose="qr_jwt_sign",
             payload={
