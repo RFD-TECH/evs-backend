@@ -56,8 +56,8 @@ def verify_qr_token(token: str) -> dict:
     issuer = getattr(settings, "EVS_QR_JWT_ISSUER", _QR_JWT_ISSUER_DEFAULT)
     return _jwt.decode(
         token, secret, algorithms=["HS256"],
-        options={"leeway": _QR_JWT_CLOCK_SKEW},
         issuer=issuer,
+        leeway=_QR_JWT_CLOCK_SKEW,
     )
 
 
