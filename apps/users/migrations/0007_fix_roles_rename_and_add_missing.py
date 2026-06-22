@@ -110,7 +110,7 @@ def reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("users", "0003_userrole_rolechangeevent_mutualexclusion"),
+        ("users", "0006_userrole_rolechangeevent_mutualexclusion"),
     ]
 
     operations = [

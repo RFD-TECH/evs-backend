@@ -5,7 +5,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("registry", "0001_initial"),
+        ("registry", "0003_integrity_run"),
     ]
 
     operations = [

@@ -8,7 +8,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("audit", "0001_initial"),
+        ("audit", "0002_audit_immutability_trigger"),
     ]
 
     operations = [

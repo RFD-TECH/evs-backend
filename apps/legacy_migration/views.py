@@ -8,8 +8,8 @@ from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from shared.auth import IsAuthenticated
-from shared.pagination import StandardResultsSetPagination
+from rest_framework.permissions import IsAuthenticated
+from shared.pagination import StandardResultsPagination
 from shared.permissions import HasPermission
 
 from . import ingest_service, report_service, wave_service

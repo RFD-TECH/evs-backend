@@ -11,8 +11,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.viewsets import ReadOnlyModelViewSet
 
-from shared.auth import IsAuthenticated
-from shared.pagination import StandardResultsSetPagination
+from rest_framework.permissions import IsAuthenticated
+from shared.pagination import StandardResultsPagination
 from shared.permissions import HasPermission
 
 from . import detection_service, evidence_service
@@ -75,7 +75,7 @@ class FraudFlagViewSet(ReadOnlyModelViewSet):
 
     permission_classes = [IsAuthenticated, HasPermission("fraud:read")]
     serializer_class = FraudFlagSerializer
-    pagination_class = StandardResultsSetPagination
+    pagination_class = StandardResultsPagination
 
     def get_queryset(self):
         qs = FraudFlag.objects.select_related("rule", "run").prefetch_related("actions")
