@@ -89,7 +89,7 @@ jobs:
         run: bandit -r apps/ shared/ -ll || true
 
       - name: Django system check
-        run: python manage.py check || true
+        run: python manage.py check
 
       - name: Apply migrations
         run: python manage.py migrate
