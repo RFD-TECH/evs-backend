@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("users", "0002_seed_permissions_and_roles"),
+        ("users", "0005_seed_phase9_10_permissions"),
     ]
 
     operations = [

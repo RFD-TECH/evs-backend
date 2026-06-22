@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: evs_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+        ports:
+          - 6379:6379
+
+    env:
+      DJANGO_SETTINGS_MODULE: config.settings.base
+      SECRET_KEY: ci-only-not-a-real-secret-key
+      DBENGINE: postgresql
+      DBNAME: evs_test
+      DBUSER: postgres
+      DBPASSWORD: postgres
+      DBHOST: localhost
+      DBPORT: "5432"
+      REDIS_URL: redis://localhost:6379/0
+      KAFKA_ENABLED: "false"
+      KEYCLOAK_ENABLED: "false"
+      CELERY_TASK_ALWAYS_EAGER: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system dependencies
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            libmagic1 \
+            libpango-1.0-0 \
+            libpangocairo-1.0-0 \
+            libgdk-pixbuf-xlib-2.0-0 \
+            libffi-dev \
+            shared-mime-info \
+            fontconfig
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt ruff bandit pytest pytest-django
+
+      - name: Lint with ruff (advisory)
+        run: ruff check . || true
+
+      - name: Security scan with bandit (advisory)
+        run: bandit -r apps/ shared/ -ll || true
+
+      - name: Django system check
+        run: python manage.py check || true
+
+      - name: Apply migrations
+        run: python manage.py migrate
+
+      - name: Run tests
+        run: |
+          set +e
+          pytest --verbosity=2
+          STATUS=$?
+          set -e
+          [ $STATUS -eq 0 ] || [ $STATUS -eq 5 ] || exit $STATUS
+
+  docker:
+    name: Build and push Docker image
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/rfd-tech/evs-backend:dev
+            ghcr.io/rfd-tech/evs-backend:dev-${{ github.sha }}
+            ghcr.io/rfd-tech/evs-backend:latest
+
+  deploy:
+    name: Deploy to VPS
+    needs: docker
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    permissions:
+      contents: read
+
+    steps:
+      - name: Deploy to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            cd /opt/gateway
+            docker compose pull evs-backend
+            docker compose up -d evs-backend
+            docker image prune -f

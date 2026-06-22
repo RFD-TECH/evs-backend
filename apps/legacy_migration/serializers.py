@@ -115,7 +115,7 @@ class CredentialVersionSerializer(serializers.ModelSerializer):
 
 
 class RecordCorrectionSerializer(serializers.Serializer):
-    patch = serializers.DictField(min_length=1)
+    patch = serializers.DictField(allow_empty=False)
     change_reason = serializers.CharField(min_length=1, max_length=500)
 
 

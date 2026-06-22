@@ -98,7 +98,7 @@ def seed_reverse(apps, schema_editor):
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("audit", "0002_phase9_10_models"),
+        ("audit", "0003_phase9_10_models"),
     ]
 
     operations = [

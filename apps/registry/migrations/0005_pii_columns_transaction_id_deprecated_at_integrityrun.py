@@ -10,7 +10,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ("registry", "0001_initial"),
+        ("registry", "0004_revocationrecord_source_signature_ref"),
     ]
 
     operations = [
@@ -82,24 +82,5 @@ class Migration(migrations.Migration):
             index=models.Index(fields=["graduate_index_number"], name="cred_grad_idx_num_idx"),
         ),
 
-        # ── IntegrityRun model ─────────────────────────────────────────────────
-        migrations.CreateModel(
-            name="IntegrityRun",
-            fields=[
-                ("id", models.UUIDField(default=uuid.uuid4, editable=False, primary_key=True, serialize=False)),
-                ("started_at", models.DateTimeField(db_index=True, default=django.utils.timezone.now)),
-                ("completed_at", models.DateTimeField(blank=True, null=True)),
-                ("records_checked", models.PositiveIntegerField(default=0)),
-                ("tampered_count", models.PositiveIntegerField(default=0)),
-                ("tampered_ids", models.JSONField(default=list,
-                    help_text="UUIDs of credentials found tampered (capped at 100 for storage).")),
-                ("anchor_hash", models.CharField(blank=True, max_length=64,
-                    help_text="chain_hash of the AuditEvent written for this sweep.")),
-                ("status", models.CharField(default="running", max_length=20)),
-            ],
-            options={
-                "db_table": "registry_integrityrun",
-                "ordering": ["-started_at"],
-            },
-        ),
+
     ]

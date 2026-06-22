@@ -22,7 +22,7 @@ class HsmKey(models.Model):
     kid = models.CharField(max_length=100, unique=True, db_index=True,
         help_text="Key identifier — included in JWT header and JWKS response.")
     algorithm = models.CharField(max_length=10, choices=ALGORITHM_CHOICES)
-    purpose = models.CharField(max_length=20, choices=PURPOSE_CHOICES, db_index=True)
+    purpose = models.CharField(max_length=50, choices=PURPOSE_CHOICES, db_index=True)
     public_key_pem = models.TextField(
         blank=True,
         help_text="PEM-encoded public key (stored here; private key stays in HSM/env).",
