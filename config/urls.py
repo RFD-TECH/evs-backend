@@ -26,8 +26,8 @@ def _make_schema_urls():
         from rest_framework.permissions import AllowAny
         return [
             path("v1/schema", SpectacularAPIView.as_view(permission_classes=[AllowAny]), name="schema"),
-            path("v1/docs", SpectacularSwaggerView.as_view(url_name="schema", permission_classes=[AllowAny]), name="docs"),
-            path("v1/redoc", SpectacularRedocView.as_view(url_name="schema", permission_classes=[AllowAny]), name="redoc"),
+            path("v1/docs", SpectacularSwaggerView.as_view(url="/api/evs/v1/schema", permission_classes=[AllowAny]), name="docs"),
+            path("v1/redoc", SpectacularRedocView.as_view(url="/api/evs/v1/schema", permission_classes=[AllowAny]), name="redoc"),
         ]
     except ImportError:
         return []
