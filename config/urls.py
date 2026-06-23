@@ -24,9 +24,9 @@ def _make_schema_urls():
             SpectacularSwaggerView,
         )
         return [
-            path("schema/", SpectacularAPIView.as_view(), name="schema"),
-            path("schema/swagger-ui/", SpectacularSwaggerView.as_view(url_name="schema"), name="swagger-ui"),
-            path("schema/redoc/", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
+            path("v1/schema", SpectacularAPIView.as_view(), name="schema"),
+            path("v1/docs", SpectacularSwaggerView.as_view(url_name="schema"), name="docs"),
+            path("v1/redoc", SpectacularRedocView.as_view(url_name="schema"), name="redoc"),
         ]
     except ImportError:
         return []
